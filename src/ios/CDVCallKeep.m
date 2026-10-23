@@ -234,14 +234,6 @@ static NSString *const kSettings = @"CDVCallKeepSettings";
     return YES;
 }
 
-- (void)configureAudioSession
-{
-    AVAudioSession *session = [AVAudioSession sharedInstance];
-    [session setCategory:AVAudioSessionCategoryPlayAndRecord
-             withOptions:AVAudioSessionCategoryOptionAllowBluetooth | AVAudioSessionCategoryOptionAllowBluetoothA2DP error:nil];
-    [session setMode:AVAudioSessionModeVoiceChat error:nil];
-}
-
 #pragma mark - CXProviderDelegate
 
 - (void)providerDidReset:(CXProvider *)provider
@@ -257,7 +249,6 @@ static NSString *const kSettings = @"CDVCallKeepSettings";
 
 - (void)provider:(CXProvider *)provider performStartCallAction:(CXStartCallAction *)action
 {
-    [self configureAudioSession];
     [self.outgoing addObject:action.callUUID];
     [provider reportOutgoingCallWithUUID:action.callUUID startedConnectingAtDate:nil];
     CXCallUpdate *update = [self updateFor:action.contactIdentifier handle:action.handle.value video:action.video];
@@ -276,7 +267,6 @@ static NSString *const kSettings = @"CDVCallKeepSettings";
 
 - (void)provider:(CXProvider *)provider performAnswerCallAction:(CXAnswerCallAction *)action
 {
-    [self configureAudioSession];
     [self.answered addObject:action.callUUID];
     [action fulfill];
     [self emit:@"answer" body:[self describe:action.callUUID extra:nil]];
