@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<plugin xmlns="http://apache.org/cordova/ns/plugins/1.0" xmlns:android="http://schemas.android.com/apk/res/android"
+	id="cordova-plugin-calls" version="0.2.0">
+
+	<name>CallKeep</name>
+	<description>CallKit and ConnectionService for several calls at once, with hold, behind cordova-plugin-callkit's API</description>
+
+	<engines>
+		<engine name="cordova-ios" version=">=8.0.0" />
+		<engine name="cordova-android" version=">=13.0.0" />
+	</engines>
+
+	<!-- the same names cordova-plugin-callkit used, so a page written for it runs on either shell.
+	     The two cannot be installed together. -->
+	<js-module name="CordovaCall" src="www/CordovaCall.js">
+		<clobbers target="cordova.plugins.CordovaCall" />
+	</js-module>
+	<js-module name="VoIPPushNotification" src="www/VoIPPushNotification.js">
+		<clobbers target="VoIPPushNotification" />
+	</js-module>
+
+	<platform name="ios">
+		<config-file target="config.xml" parent="/*">
+			<feature name="CordovaCall">
+				<param name="ios-package" value="CDVCallKeep" />
+				<param name="onload" value="true" />
+			</feature>
+		</config-file>
+
+		<config-file target="*-Info.plist" parent="UIBackgroundModes">
+			<array>
+				<string>voip</string>
+				<string>audio</string>
+			</array>
+		</config-file>
+
+		<header-file src="src/ios/CDVCallKeep.h" />
+		<source-file src="src/ios/CDVCallKeep.m" />
+
+		<framework src="CallKit.framework" />
+		<framework src="PushKit.framework" />
+		<framework src="Intents.framework" />
+		<framework src="AVFoundation.framework" />
+	</platform>
+
+	<platform name="android">
+		<config-file target="res/xml/config.xml" parent="/*">
+			<feature name="CordovaCall">
+				<param name="android-package" value="com.inremote.calls.CallKeep" />
+				<param name="onload" value="true" />
+			</feature>
+		</config-file>
+
+		<config-file target="AndroidManifest.xml" parent="/manifest">
+			<uses-permission android:name="android.permission.CALL_PHONE" />
+			<uses-permission android:name="android.permission.READ_PHONE_STATE" />
+		</config-file>
+
+		<!-- Telecom binds it from outside the app, and only Telecom can: BIND_TELECOM_CONNECTION_SERVICE
+		     is a system permission -->
+		<config-file target="AndroidManifest.xml" parent="/manifest/application">
+			<service android:name="com.inremote.calls.CallConnectionService"
+				android:exported="true"
+				android:permission="android.permission.BIND_TELECOM_CONNECTION_SERVICE">
+				<intent-filter>
+					<action android:name="android.telecom.ConnectionService" />
+				</intent-filter>
+			</service>
+		</config-file>
+
+		<source-file src="src/android/CallKeep.java" target-dir="src/com/inremote/calls" />
+		<source-file src="src/android/CallConnectionService.java" target-dir="src/com/inremote/calls" />
+		<source-file src="src/android/CallConnection.java" target-dir="src/com/inremote/calls" />
+	</platform>
+</plugin>
