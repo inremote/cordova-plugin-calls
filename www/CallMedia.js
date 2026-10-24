@@ -275,6 +275,19 @@ function render(viewId, track, rect, options) {
     return call('rtcRender', [viewId, track ? track.id : null, rect || null, options || {}]);
 }
 
+// The system's floating window for a call's picture: the remote track shown in the view `viewId`. Armed,
+// it opens by itself when the app leaves the foreground, or now with showPip(true); `onevent` hears
+// 'start', 'stop' and 'restore' - the window's button back to the call. No track disarms it.
+function pip(viewId, track, onevent) {
+    exec(function (event) {
+        if (onevent && typeof event === 'string') onevent(event);
+    }, function () {}, 'CordovaCall', 'rtcPip', [viewId, track ? track.id : null]);
+}
+
+function showPip(on) {
+    return call('rtcPipStart', [!!on]);
+}
+
 // keep the app running while a remote session is live; counted, so every true needs its false
 function keepRunning(on) {
     return call('keepRunning', [!!on]);
@@ -285,5 +298,7 @@ module.exports = {
     MediaStream: MediaStream,
     getUserMedia: getUserMedia,
     render: render,
+    pip: pip,
+    showPip: showPip,
     keepRunning: keepRunning,
 };

@@ -15,7 +15,7 @@ The two plugins cannot be installed together.
 ## Install
 
 ```xml
-<plugin name="cordova-plugin-calls" spec="github:inremote/cordova-plugin-calls#v0.3.0" />
+<plugin name="cordova-plugin-calls" spec="github:inremote/cordova-plugin-calls#v0.4.0" />
 ```
 
 Requires cordova-ios 8 and cordova-android 13 or newer. On iOS the app needs the VoIP push entitlement
@@ -105,13 +105,19 @@ const pc = new media.RTCPeerConnection({ iceServers });                     // t
 stream.getTracks().forEach(track => pc.addTrack(track, stream));
 
 media.render('remote', track, { x, y, width, height }, { cover: true });   // page pixels, or null to hide
+media.pip('remote', track, event => {});                                     // the system's floating window
+media.showPip(true);
 media.keepRunning(true);                                                    // counted: every true needs its false
 ```
 
 `RTCPeerConnection` covers what a call uses - offers and answers, ICE, tracks, transceivers,
 `replaceTrack`, `restartIce`, `getStats` - and carries no data channel. Video is not a `srcObject`:
 `render` places the native picture under the webview at the given rect, so the page has to be
-transparent there; one view per id, so several calls each keep their own. `keepRunning` keeps the app
+transparent there; one view per id, so several calls each keep their own. `pip` arms the system's
+floating window (picture in picture) on the remote track shown in a view, which is where it grows from:
+it opens by itself when the app leaves the foreground, or with `showPip(true)`, and its callback hears
+`start`, `stop` and `restore` (the window's button back to the call); no track disarms it. The camera
+keeps sending while it is open where the device supports multitasking camera access. `keepRunning` keeps the app
 alive in the background while something other than a call needs it, and steps aside while a call holds
 the audio session.
 
@@ -130,5 +136,5 @@ the audio session.
 
 ## Status
 
-0.3.0 has not been run on a device. The Android sources compile against the Android 16 API; the iOS
+0.4.0 has not been run on a device. The Android sources compile against the Android 16 API; the iOS
 sources have not been compiled.

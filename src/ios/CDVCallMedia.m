@@ -11,6 +11,7 @@
 // brought there before they touch any state or reach the page.
 
 #import "CDVCallMedia.h"
+#import <AVKit/AVKit.h>
 #import <QuartzCore/QuartzCore.h>
 #import <WebKit/WebKit.h>
 #import <WebRTC/WebRTC.h>
@@ -127,12 +128,109 @@ static RTCConfiguration *configurationFrom(NSDictionary *config)
 @property (nonatomic, copy) NSString *trackId;
 @property (nonatomic, copy) NSString *pcId;
 @property (atomic) CFTimeInterval last;
+@property (atomic) CGSize size;
 @property (nonatomic) BOOL live;
 @end
 
 @implementation CDVFrameWatch
-- (void)setSize:(CGSize)size {}
+- (void)setSize:(CGSize)size { _size = size; }
 - (void)renderFrame:(RTCVideoFrame *)frame { if (frame) self.last = CACurrentMediaTime(); }
+@end
+
+
+// The picture in the system's floating window, which shows no Metal view: frames are queued on an
+// AVSampleBufferDisplayLayer, and a decoder's planes are packed into a pixel buffer first.
+@interface CDVSampleView : UIView <RTCVideoRenderer>
+@property (nonatomic, copy) void (^sized)(CGSize size);
+@end
+
+@implementation CDVSampleView {
+    AVSampleBufferDisplayLayer *_display;
+    RTCVideoRotation _rotation;
+}
+
+- (instancetype)initWithFrame:(CGRect)frame
+{
+    if (!(self = [super initWithFrame:frame])) return nil;
+    self.backgroundColor = [UIColor blackColor];
+    _display = [[AVSampleBufferDisplayLayer alloc] init];
+    _display.videoGravity = AVLayerVideoGravityResizeAspect;
+    [self.layer addSublayer:_display];
+    return self;
+}
+
+- (void)layoutSubviews
+{
+    [super layoutSubviews];
+    CGSize size = self.bounds.size;
+    BOOL sideways = _rotation == RTCVideoRotation_90 || _rotation == RTCVideoRotation_270;
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    _display.bounds = CGRectMake(0, 0, sideways ? size.height : size.width, sideways ? size.width : size.height);
+    _display.position = CGPointMake(size.width / 2, size.height / 2);
+    _display.affineTransform = CGAffineTransformMakeRotation(_rotation * M_PI / 180.0);
+    [CATransaction commit];
+}
+
+- (void)setSize:(CGSize)size
+{
+    dispatch_async(dispatch_get_main_queue(), ^{ if (self.sized) self.sized(size); });
+}
+
+static CVPixelBufferRef pixelsOf(RTCVideoFrame *frame)
+{
+    if ([frame.buffer isKindOfClass:[RTCCVPixelBuffer class]]) return CVPixelBufferRetain(((RTCCVPixelBuffer *)frame.buffer).pixelBuffer);
+    id<RTCI420Buffer> planes = [frame.buffer toI420];
+    CVPixelBufferRef pixels = NULL;
+    NSDictionary *attributes = @{ (id)kCVPixelBufferIOSurfacePropertiesKey: @{} };
+    if (CVPixelBufferCreate(NULL, planes.width, planes.height, kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
+                            (__bridge CFDictionaryRef)attributes, &pixels) != kCVReturnSuccess) return NULL;
+    CVPixelBufferLockBaseAddress(pixels, 0);
+    uint8_t *luma = CVPixelBufferGetBaseAddressOfPlane(pixels, 0);
+    size_t lumaStride = CVPixelBufferGetBytesPerRowOfPlane(pixels, 0);
+    for (int row = 0; row < planes.height; row++) memcpy(luma + row * lumaStride, planes.dataY + row * planes.strideY, planes.width);
+    uint8_t *chroma = CVPixelBufferGetBaseAddressOfPlane(pixels, 1);
+    size_t chromaStride = CVPixelBufferGetBytesPerRowOfPlane(pixels, 1);
+    for (int row = 0; row < planes.chromaHeight; row++) {
+        const uint8_t *u = planes.dataU + row * planes.strideU;
+        const uint8_t *v = planes.dataV + row * planes.strideV;
+        uint8_t *line = chroma + row * chromaStride;
+        for (int col = 0; col < planes.chromaWidth; col++) {
+            line[2 * col] = u[col];
+            line[2 * col + 1] = v[col];
+        }
+    }
+    CVPixelBufferUnlockBaseAddress(pixels, 0);
+    return pixels;
+}
+
+- (void)renderFrame:(RTCVideoFrame *)frame
+{
+    if (!frame) return;
+    CVPixelBufferRef pixels = pixelsOf(frame);
+    if (!pixels) return;
+    CMVideoFormatDescriptionRef format = NULL;
+    CMSampleBufferRef sample = NULL;
+    CMSampleTimingInfo timing = { kCMTimeInvalid, kCMTimeInvalid, kCMTimeInvalid };
+    if (CMVideoFormatDescriptionCreateForImageBuffer(NULL, pixels, &format) == noErr
+        && CMSampleBufferCreateReadyWithImageBuffer(NULL, pixels, format, &timing, &sample) == noErr) {
+        CFArrayRef attachments = CMSampleBufferGetSampleAttachmentsArray(sample, YES);
+        CFDictionarySetValue((CFMutableDictionaryRef)CFArrayGetValueAtIndex(attachments, 0), kCMSampleAttachmentKey_DisplayImmediately, kCFBooleanTrue);
+        RTCVideoRotation rotation = frame.rotation;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (rotation != self->_rotation) {
+                self->_rotation = rotation;
+                [self setNeedsLayout];
+            }
+            if (self->_display.status == AVQueuedSampleBufferRenderingStatusFailed) [self->_display flush];
+            [self->_display enqueueSampleBuffer:sample];
+            CFRelease(sample);
+        });
+    }
+    if (format) CFRelease(format);
+    CVPixelBufferRelease(pixels);
+}
+
 @end
 
 
@@ -143,7 +241,7 @@ static RTCConfiguration *configurationFrom(NSDictionary *config)
 @end
 
 
-@interface CDVCallMedia ()
+@interface CDVCallMedia () <AVPictureInPictureControllerDelegate>
 @property (nonatomic, weak) CDVCallKeep *plugin;
 @property (nonatomic, strong) RTCPeerConnectionFactory *factory;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, CDVPeer *> *peers;
@@ -153,6 +251,13 @@ static RTCConfiguration *configurationFrom(NSDictionary *config)
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSString *> *viewTracks;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, CDVFrameWatch *> *watches;
 @property (nonatomic, strong) NSTimer *watchTimer;
+@property (nonatomic, strong) AVPictureInPictureController *pip;
+@property (nonatomic, strong) AVPictureInPictureVideoCallViewController *pipContent;
+@property (nonatomic, strong) CDVSampleView *pipView;
+@property (nonatomic, strong) RTCVideoTrack *pipTrack;
+@property (nonatomic, copy) NSString *pipViewId;
+@property (nonatomic, copy) NSString *pipCallbackId;
+@property (nonatomic) BOOL pipShowing;
 + (instancetype)shared;
 - (void)emit:(CDVPeer *)peer event:(NSString *)event extra:(NSDictionary *)extra;
 - (NSDictionary *)stateOf:(CDVPeer *)peer;
@@ -161,6 +266,8 @@ static RTCConfiguration *configurationFrom(NSDictionary *config)
 - (RTCVideoTrack *)cameraTrack:(NSString *)facing;
 - (RTCMTLVideoView *)viewFor:(NSString *)viewId in:(UIView *)webView;
 - (void)detach:(NSString *)viewId;
+- (void)pipFor:(NSString *)viewId track:(RTCVideoTrack *)track in:(UIView *)webView callback:(NSString *)callbackId;
+- (void)pipOff;
 @end
 
 
@@ -440,6 +547,15 @@ static AVAudioEngine *keepEngine = nil;
 
     RTCVideoSource *source = [self.factory videoSource];
     RTCCameraVideoCapturer *capturer = [[RTCCameraVideoCapturer alloc] initWithDelegate:source];
+    // the camera keeps sending while the call is in the system's floating window, where the device allows it
+    if (@available(iOS 16.0, *)) {
+        AVCaptureSession *session = capturer.captureSession;
+        if (session.isMultitaskingCameraAccessSupported) {
+            [session beginConfiguration];
+            session.multitaskingCameraAccessEnabled = YES;
+            [session commitConfiguration];
+        }
+    }
     RTCVideoTrack *track = [self.factory videoTrackWithSource:source trackId:[NSUUID UUID].UUIDString];
     [capturer startCaptureWithDevice:device format:format fps:(NSInteger)MIN(30.0, fastest) completionHandler:nil];
     self.capturers[track.trackId] = capturer;
@@ -471,6 +587,100 @@ static AVAudioEngine *keepEngine = nil;
     RTCMediaStreamTrack *track = trackId ? self.tracks[trackId] : nil;
     if (view && [track isKindOfClass:[RTCVideoTrack class]]) [(RTCVideoTrack *)track removeRenderer:view];
     [self.viewTracks removeObjectForKey:viewId];
+}
+
+#pragma mark - the system's floating window
+
+// One call's picture at a time goes to the system's floating window: the live call's, whose remote view
+// on the page is where the window grows from and goes back to. Armed, it opens by itself when the app
+// leaves the foreground; frames go to it only while it is open.
+- (void)pipFor:(NSString *)viewId track:(RTCVideoTrack *)track in:(UIView *)webView callback:(NSString *)callbackId
+{
+    self.pipCallbackId = callbackId;
+    if (![self.pipViewId isEqualToString:viewId]) {
+        [self pipOff];
+        if (![AVPictureInPictureController isPictureInPictureSupported]) return;
+        UIView *source = [self viewFor:viewId in:webView];
+        self.pipContent = [[AVPictureInPictureVideoCallViewController alloc] init];
+        self.pipView = [[CDVSampleView alloc] initWithFrame:self.pipContent.view.bounds];
+        self.pipView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+        [self.pipContent.view addSubview:self.pipView];
+        __weak CDVCallMedia *weakSelf = self;
+        self.pipView.sized = ^(CGSize size) { if (size.width > 0 && size.height > 0) weakSelf.pipContent.preferredContentSize = size; };
+        AVPictureInPictureControllerContentSource *content =
+            [[AVPictureInPictureControllerContentSource alloc] initWithActiveVideoCallSourceView:source contentViewController:self.pipContent];
+        self.pip = [[AVPictureInPictureController alloc] initWithContentSource:content];
+        self.pip.delegate = self;
+        self.pip.canStartPictureInPictureAutomaticallyFromInline = YES;
+        self.pipViewId = viewId;
+    }
+    if (self.pipTrack == track) return;
+    if (self.pipShowing) {
+        [self.pipTrack removeRenderer:self.pipView];
+        [track addRenderer:self.pipView];
+    }
+    self.pipTrack = track;
+}
+
+- (void)pipOff
+{
+    self.pip.delegate = nil;
+    if (self.pip.isPictureInPictureActive) [self.pip stopPictureInPicture];
+    if (self.pipShowing) [self.pipTrack removeRenderer:self.pipView];
+    self.pipShowing = NO;
+    self.pip = nil;
+    self.pipContent = nil;
+    self.pipView = nil;
+    self.pipTrack = nil;
+    self.pipViewId = nil;
+}
+
+- (void)pipEmit:(NSString *)event
+{
+    CDVCallKeep *plugin = self.plugin;
+    if (!plugin || !self.pipCallbackId) return;
+    CDVPluginResult *result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:event];
+    [result setKeepCallbackAsBool:YES];
+    [plugin.commandDelegate sendPluginResult:result callbackId:self.pipCallbackId];
+}
+
+- (void)pipShow:(BOOL)on
+{
+    if (on == self.pipShowing) return;
+    self.pipShowing = on;
+    if (on) [self.pipTrack addRenderer:self.pipView];
+    else [self.pipTrack removeRenderer:self.pipView];
+}
+
+- (void)pictureInPictureControllerWillStartPictureInPicture:(AVPictureInPictureController *)controller
+{
+    CGSize size = self.watches[self.pipTrack.trackId].size;
+    self.pipContent.preferredContentSize = size.width > 0 && size.height > 0 ? size : CGSizeMake(16, 9);
+    [self pipShow:YES];
+}
+
+- (void)pictureInPictureControllerDidStartPictureInPicture:(AVPictureInPictureController *)controller
+{
+    [self pipEmit:@"start"];
+}
+
+- (void)pictureInPictureController:(AVPictureInPictureController *)controller failedToStartPictureInPictureWithError:(NSError *)error
+{
+    [self pipShow:NO];
+    [self pipEmit:@"stop"];
+}
+
+- (void)pictureInPictureControllerDidStopPictureInPicture:(AVPictureInPictureController *)controller
+{
+    [self pipShow:NO];
+    [self pipEmit:@"stop"];
+}
+
+- (void)pictureInPictureController:(AVPictureInPictureController *)controller
+    restoreUserInterfaceForPictureInPictureStopWithCompletionHandler:(void (^)(BOOL restored))completionHandler
+{
+    [self pipEmit:@"restore"];
+    completionHandler(YES);
 }
 
 @end
@@ -816,6 +1026,27 @@ static AVAudioEngine *keepEngine = nil;
     view.videoContentMode = [options[@"cover"] boolValue] ? UIViewContentModeScaleAspectFill : UIViewContentModeScaleAspectFit;
     view.layer.cornerRadius = [options[@"radius"] doubleValue];
     view.hidden = NO;
+    [self.commandDelegate sendPluginResult:[CDVPluginResult resultWithStatus:CDVCommandStatus_OK] callbackId:command.callbackId];
+}
+
+// `pip(viewId, trackId)`: the system's floating window for the remote track shown in that view, whose
+// callback hears 'start', 'stop' and 'restore'. No track disarms it, if it is still that view's.
+- (void)rtcPip:(CDVInvokedUrlCommand *)command
+{
+    CDVCallMedia *media = [self media];
+    NSString *viewId = stringArg(command.arguments, 0);
+    RTCMediaStreamTrack *track = media.tracks[stringArg(command.arguments, 1) ?: @""];
+    if (viewId && [track isKindOfClass:[RTCVideoTrack class]]) return [media pipFor:viewId track:(RTCVideoTrack *)track in:self.webView callback:command.callbackId];
+    if (viewId && [media.pipViewId isEqualToString:viewId]) [media pipOff];
+    [self.commandDelegate sendPluginResult:[CDVPluginResult resultWithStatus:CDVCommandStatus_OK] callbackId:command.callbackId];
+}
+
+- (void)rtcPipStart:(CDVInvokedUrlCommand *)command
+{
+    AVPictureInPictureController *pip = [self media].pip;
+    BOOL on = command.arguments.count > 0 && [command.arguments[0] boolValue];
+    if (on && pip.isPictureInPicturePossible && !pip.isPictureInPictureActive) [pip startPictureInPicture];
+    else if (!on && pip.isPictureInPictureActive) [pip stopPictureInPicture];
     [self.commandDelegate sendPluginResult:[CDVPluginResult resultWithStatus:CDVCommandStatus_OK] callbackId:command.callbackId];
 }
 

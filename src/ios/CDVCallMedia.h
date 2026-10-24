@@ -30,6 +30,8 @@
 - (void)rtcTrackEnabled:(CDVInvokedUrlCommand *)command;
 - (void)rtcTrackStop:(CDVInvokedUrlCommand *)command;
 - (void)rtcRender:(CDVInvokedUrlCommand *)command;
+- (void)rtcPip:(CDVInvokedUrlCommand *)command;
+- (void)rtcPipStart:(CDVInvokedUrlCommand *)command;
 - (void)keepRunning:(CDVInvokedUrlCommand *)command;
 
 @end
