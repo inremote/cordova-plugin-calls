@@ -306,10 +306,6 @@ static NSString *const kSettings = @"CDVCallKeepSettings";
 - (void)provider:(CXProvider *)provider didActivateAudioSession:(AVAudioSession *)audioSession
 {
     self.speaker = [self onSpeaker];
-    if ([UIApplication sharedApplication].applicationState != UIApplicationStateBackground) return;
-    for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
-        [[NSNotificationCenter defaultCenter] postNotificationName:UISceneWillEnterForegroundNotification object:scene];
-    }
 }
 
 - (void)provider:(CXProvider *)provider didDeactivateAudioSession:(AVAudioSession *)audioSession {}
