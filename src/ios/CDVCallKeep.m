@@ -74,6 +74,8 @@ static NSString *const kSettings = @"CDVCallKeepSettings";
     _provider = [[CXProvider alloc] initWithConfiguration:[self configuration]];
     [_provider setDelegate:self queue:nil];
     _controller = [[CXCallController alloc] init];
+    [[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayAndRecord mode:AVAudioSessionModeVoiceChat
+                                         options:AVAudioSessionCategoryOptionAllowBluetooth error:nil];
 
     _registry = [[PKPushRegistry alloc] initWithQueue:dispatch_get_main_queue()];
     _registry.delegate = self;
