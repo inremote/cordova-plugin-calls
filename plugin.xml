@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <plugin xmlns="http://apache.org/cordova/ns/plugins/1.0" xmlns:android="http://schemas.android.com/apk/res/android"
-	id="cordova-plugin-calls" version="0.2.0">
+	id="cordova-plugin-calls" version="0.3.0">
 
 	<name>CallKeep</name>
 	<description>CallKit and ConnectionService for several calls at once, with hold, behind cordova-plugin-callkit's API</description>
@@ -34,13 +34,31 @@
 			</array>
 		</config-file>
 
+		<!-- a call's media in the app's own process, under the audio session CallKit activates;
+		     WKWebView's runs in WebKit's GPU process, which CallKit leaves silent -->
+		<js-module name="CallMedia" src="www/CallMedia.js">
+			<clobbers target="cordova.plugins.CallMedia" />
+		</js-module>
+
 		<header-file src="src/ios/CDVCallKeep.h" />
 		<source-file src="src/ios/CDVCallKeep.m" />
+		<header-file src="src/ios/CDVCallMedia.h" />
+		<source-file src="src/ios/CDVCallMedia.m" />
+
+		<podspec>
+			<config>
+				<source url="https://cdn.cocoapods.org/" />
+			</config>
+			<pods>
+				<pod name="WebRTC-lib" spec="~> 155.0" />
+			</pods>
+		</podspec>
 
 		<framework src="CallKit.framework" />
 		<framework src="PushKit.framework" />
 		<framework src="Intents.framework" />
 		<framework src="AVFoundation.framework" />
+		<framework src="WebKit.framework" />
 	</platform>
 
 	<platform name="android">

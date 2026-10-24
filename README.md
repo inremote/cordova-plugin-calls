@@ -15,7 +15,7 @@ The two plugins cannot be installed together.
 ## Install
 
 ```xml
-<plugin name="cordova-plugin-calls" spec="github:inremote/cordova-plugin-calls#v0.2.0" />
+<plugin name="cordova-plugin-calls" spec="github:inremote/cordova-plugin-calls#v0.3.0" />
 ```
 
 Requires cordova-ios 8 and cordova-android 13 or newer. On iOS the app needs the VoIP push entitlement
@@ -91,6 +91,30 @@ The call is read from the push's `data` field, a JSON string, in cordova-plugin-
 default `ConnectionId`) and `Video` (default `setVideo`) are optional. A push with no call in it is
 reported and ended at once, which is what Apple requires.
 
+## Call media (iOS)
+
+CallKit's audio session silences WKWebView's own media: the webview plays and records in WebKit's GPU
+process, which a call's session does not reach. `cordova.plugins.CallMedia` runs a call's media in the
+app's process instead, on libwebrtc (the `WebRTC-lib` pod), with the session activated by CallKit.
+
+```js
+const media = cordova.plugins.CallMedia;
+
+const stream = await media.getUserMedia({ audio: true, video: 'user' });   // or 'environment'
+const pc = new media.RTCPeerConnection({ iceServers });                     // the browser's API
+stream.getTracks().forEach(track => pc.addTrack(track, stream));
+
+media.render('remote', track, { x, y, width, height }, { cover: true });   // page pixels, or null to hide
+media.keepRunning(true);                                                    // counted: every true needs its false
+```
+
+`RTCPeerConnection` covers what a call uses - offers and answers, ICE, tracks, transceivers,
+`replaceTrack`, `restartIce`, `getStats` - and carries no data channel. Video is not a `srcObject`:
+`render` places the native picture under the webview at the given rect, so the page has to be
+transparent there; one view per id, so several calls each keep their own. `keepRunning` keeps the app
+alive in the background while something other than a call needs it, and steps aside while a call holds
+the audio session.
+
 ## Platform notes
 
 - **iOS:** up to three call groups of one call each - a live call, a held one and one ringing. Calls
@@ -106,5 +130,5 @@ reported and ended at once, which is what Apple requires.
 
 ## Status
 
-0.2.0 has not been run on a device. The Android sources compile against the Android 16 API; the iOS
+0.3.0 has not been run on a device. The Android sources compile against the Android 16 API; the iOS
 sources have not been compiled.

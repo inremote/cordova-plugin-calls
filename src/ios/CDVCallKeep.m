@@ -10,6 +10,7 @@
 // for it: an event says the system UI did something, so the app hears only what it did not do itself.
 
 #import "CDVCallKeep.h"
+#import "CDVCallMedia.h"
 #import <Cordova/CDVPluginNotifications.h>
 #import <AVFoundation/AVFoundation.h>
 #import <CallKit/CallKit.h>
@@ -249,6 +250,7 @@ static NSString *const kSettings = @"CDVCallKeepSettings";
 
 - (void)provider:(CXProvider *)provider performStartCallAction:(CXStartCallAction *)action
 {
+    [CDVCallMedia prepareAudioSession];
     [self.outgoing addObject:action.callUUID];
     [provider reportOutgoingCallWithUUID:action.callUUID startedConnectingAtDate:nil];
     CXCallUpdate *update = [self updateFor:action.contactIdentifier handle:action.handle.value video:action.video];
@@ -267,6 +269,7 @@ static NSString *const kSettings = @"CDVCallKeepSettings";
 
 - (void)provider:(CXProvider *)provider performAnswerCallAction:(CXAnswerCallAction *)action
 {
+    [CDVCallMedia prepareAudioSession];
     [self.answered addObject:action.callUUID];
     [action fulfill];
     [self emit:@"answer" body:[self describe:action.callUUID extra:nil]];
@@ -305,10 +308,14 @@ static NSString *const kSettings = @"CDVCallKeepSettings";
 
 - (void)provider:(CXProvider *)provider didActivateAudioSession:(AVAudioSession *)audioSession
 {
+    [CDVCallMedia audioSessionDidActivate:audioSession];
     self.speaker = [self onSpeaker];
 }
 
-- (void)provider:(CXProvider *)provider didDeactivateAudioSession:(AVAudioSession *)audioSession {}
+- (void)provider:(CXProvider *)provider didDeactivateAudioSession:(AVAudioSession *)audioSession
+{
+    [CDVCallMedia audioSessionDidDeactivate:audioSession];
+}
 
 #pragma mark - audio route
 

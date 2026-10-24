@@ -1,6 +1,6 @@
 {
   "name": "cordova-plugin-calls",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "CallKit and ConnectionService for several calls at once, with hold, behind cordova-plugin-callkit's API",
   "license": "ISC",
   "private": true,
