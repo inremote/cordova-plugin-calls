@@ -15,8 +15,6 @@
 #import <CallKit/CallKit.h>
 #import <Intents/Intents.h>
 #import <PushKit/PushKit.h>
-#import <WebKit/WebKit.h>
-#import <objc/message.h>
 
 static NSString *const kSettings = @"CDVCallKeepSettings";
 
@@ -429,29 +427,6 @@ static NSString *const kSettings = @"CDVCallKeepSettings";
 {
     _listeners = [NSMutableDictionary dictionary];
     [CDVCallKeepCore shared].plugin = self;
-    if ([self.webView isKindOfClass:[WKWebView class]]) {
-        WKPreferences *preferences = ((WKWebView *)self.webView).configuration.preferences;
-        [self disableWebKitFeature:@"CaptureAudioInGPUProcessEnabled" in:preferences];
-        [self disableWebKitFeature:@"UseGPUProcessForMediaEnabled" in:preferences];
-    }
-}
-
-- (void)disableWebKitFeature:(NSString *)key in:(WKPreferences *)preferences
-{
-    SEL list = NSSelectorFromString(@"_features");
-    SEL set = NSSelectorFromString(@"_setEnabled:forFeature:");
-    if (![WKPreferences respondsToSelector:list] || ![preferences respondsToSelector:set]) {
-        NSLog(@"[CallKeep] WebKit offers no feature switches; %@ left as it is", key);
-        return;
-    }
-    NSArray *features = ((NSArray *(*)(id, SEL))objc_msgSend)([WKPreferences class], list);
-    for (id feature in features) {
-        if (![[feature valueForKey:@"key"] isEqual:key]) continue;
-        ((void (*)(id, SEL, BOOL, id))objc_msgSend)(preferences, set, NO, feature);
-        NSLog(@"[CallKeep] %@ off", key);
-        return;
-    }
-    NSLog(@"[CallKeep] WebKit has no feature %@", key);
 }
 
 // a new page: the callbacks belonged to the one that went
