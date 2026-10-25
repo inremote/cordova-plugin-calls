@@ -1027,6 +1027,15 @@ static AVAudioEngine *keepEngine = nil;
     view.videoContentMode = [options[@"cover"] boolValue] ? UIViewContentModeScaleAspectFill : UIViewContentModeScaleAspectFit;
     view.layer.cornerRadius = [options[@"radius"] doubleValue];
     view.hidden = NO;
+
+    // views overlap the way a picture in picture does, the smaller over the larger, whichever was made first
+    NSArray<UIView *> *shown = [[media.views.allValues filteredArrayUsingPredicate:[NSPredicate predicateWithFormat:@"hidden == NO"]]
+        sortedArrayUsingComparator:^NSComparisonResult(UIView *a, UIView *b) {
+            CGFloat first = a.bounds.size.width * a.bounds.size.height, second = b.bounds.size.width * b.bounds.size.height;
+            return first > second ? NSOrderedAscending : first < second ? NSOrderedDescending : NSOrderedSame;
+        }];
+    for (UIView *each in shown) [self.webView.superview insertSubview:each belowSubview:self.webView];
+
     [self.commandDelegate sendPluginResult:[CDVPluginResult resultWithStatus:CDVCommandStatus_OK] callbackId:command.callbackId];
 }
 

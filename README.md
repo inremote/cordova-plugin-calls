@@ -15,7 +15,7 @@ The two plugins cannot be installed together.
 ## Install
 
 ```xml
-<plugin name="cordova-plugin-calls" spec="github:inremote/cordova-plugin-calls#v0.5.2" />
+<plugin name="cordova-plugin-calls" spec="github:inremote/cordova-plugin-calls#v0.5.3" />
 ```
 
 Requires cordova-ios 8 and cordova-android 13 or newer. On iOS the app needs the VoIP push entitlement
@@ -134,7 +134,8 @@ media.keepRunning(true);                                                    // c
 `RTCPeerConnection` covers what a call uses - offers and answers, ICE, tracks, transceivers,
 `replaceTrack`, `restartIce`, `getStats` - and carries no data channel. Video is not a `srcObject`:
 `render` places the native picture under the webview at the given rect, so the page has to be
-transparent there; one view per id, so several calls each keep their own. `keepRunning` keeps the app
+transparent there; one view per id, so several calls each keep their own, and views that overlap stack
+the smaller over the larger, as a picture in picture does. `keepRunning` keeps the app
 alive in the background while something other than a call needs it, and steps aside while a call holds
 the audio session.
 
@@ -156,4 +157,4 @@ the audio session.
 Both platforms build in CI. On an iPhone: calls in and out, from the lock screen and in the
 foreground, with sound both ways on native media; Recents; hold; the camera switch; the background
 keep-alive; picture in picture. Not yet run on a device: two calls at once, Android picture in picture
-(0.5.0) and the speaker routing (0.5.2).
+(0.5.0), the speaker routing (0.5.2) and the view stacking (0.5.3).
