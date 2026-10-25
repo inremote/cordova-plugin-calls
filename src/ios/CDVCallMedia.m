@@ -569,6 +569,7 @@ static AVAudioEngine *keepEngine = nil;
     RTCMTLVideoView *view = self.views[viewId];
     if (view) return view;
     view = [[RTCMTLVideoView alloc] initWithFrame:CGRectZero];
+    view.backgroundColor = [UIColor blackColor];
     view.clipsToBounds = YES;
     view.hidden = YES;
     [webView.superview insertSubview:view belowSubview:webView];

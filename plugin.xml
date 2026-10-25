@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <plugin xmlns="http://apache.org/cordova/ns/plugins/1.0" xmlns:android="http://schemas.android.com/apk/res/android"
-	id="cordova-plugin-calls" version="0.5.0">
+	id="cordova-plugin-calls" version="0.5.1">
 
 	<name>CallKeep</name>
 	<description>CallKit and ConnectionService for several calls at once, with hold, behind cordova-plugin-callkit's API</description>
