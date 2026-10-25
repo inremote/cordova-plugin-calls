@@ -618,6 +618,8 @@ static AVAudioEngine *keepEngine = nil;
 - (void)pipFor:(NSString *)viewId track:(RTCVideoTrack *)track in:(UIView *)webView callback:(NSString *)callbackId
 {
     self.pipCallbackId = callbackId;
+    // another view's picture taking over an open window keeps the window: only its picture changes
+    if (self.pip.isPictureInPictureActive) self.pipViewId = viewId;
     if (![self.pipViewId isEqualToString:viewId]) {
         [self pipOff];
         if (![AVPictureInPictureController isPictureInPictureSupported]) return;
