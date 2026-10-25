@@ -142,8 +142,10 @@ static RTCConfiguration *configurationFrom(NSDictionary *config)
 // AVSampleBufferDisplayLayer, and a decoder's planes are packed into a pixel buffer first.
 @interface CDVSampleView : UIView <RTCVideoRenderer>
 @property (nonatomic, copy) void (^sized)(CGSize size);
-/// cropped to fill, or fitted whole - as the view the window grows from and returns to draws it
+/// cropped to fill, or fitted whole, and mirrored or not - as the view the window grows from and returns
+/// to draws it
 @property (nonatomic) BOOL fill;
+@property (nonatomic) BOOL mirror;
 @end
 
 @implementation CDVSampleView {
@@ -170,13 +172,20 @@ static RTCConfiguration *configurationFrom(NSDictionary *config)
     [CATransaction setDisableActions:YES];
     _display.bounds = CGRectMake(0, 0, sideways ? size.height : size.width, sideways ? size.width : size.height);
     _display.position = CGPointMake(size.width / 2, size.height / 2);
-    _display.affineTransform = CGAffineTransformMakeRotation(_rotation * M_PI / 180.0);
+    _display.affineTransform = CGAffineTransformConcat(CGAffineTransformMakeRotation(_rotation * M_PI / 180.0),
+                                                       CGAffineTransformMakeScale(_mirror ? -1 : 1, 1));
     [CATransaction commit];
 }
 
 - (void)setSize:(CGSize)size
 {
     dispatch_async(dispatch_get_main_queue(), ^{ if (self.sized) self.sized(size); });
+}
+
+- (void)setMirror:(BOOL)mirror
+{
+    _mirror = mirror;
+    [self setNeedsLayout];
 }
 
 - (void)setFill:(BOOL)fill
@@ -676,10 +685,12 @@ static AVAudioEngine *keepEngine = nil;
 }
 
 // the window grows from the view and goes back into it drawing the picture as the view does, so
-// neither animation ends in a jump from fitted to cropped
+// neither animation ends in a jump - from fitted to cropped, or from mirrored to not
 - (void)pipMatchSource
 {
-    self.pipView.fill = self.views[self.pipViewId].videoContentMode == UIViewContentModeScaleAspectFill;
+    RTCMTLVideoView *source = self.views[self.pipViewId];
+    self.pipView.fill = source.videoContentMode == UIViewContentModeScaleAspectFill;
+    self.pipView.mirror = source.transform.a < 0;
 }
 
 - (void)pictureInPictureControllerWillStartPictureInPicture:(AVPictureInPictureController *)controller
