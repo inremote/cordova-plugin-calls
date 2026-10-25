@@ -42,11 +42,18 @@ call.setOnHold('req-123', true);        // hold, or take off hold
 call.mute('req-123'); call.unmute('req-123');
 call.speakerOn(); call.speakerOff();
 call.endCall('req-123');                // no id: every call
+
+call.pip('remote', track, onevent);     // arm the system's floating window; a null track disarms
+call.showPip(true);                     // open it now; resolves to whether it is opening
 ```
 
 Reporting a call the system already has - a VoIP push got there first - binds to that call rather than
 ringing twice. Reporting a call that is already over - declined on the lock screen before the page had
 its request - fails with `Call already ended`, and the page should refuse the request.
+
+A video call starts on the speaker and an audio call on the earpiece. On iOS the call's audio session
+is a video chat or a voice chat to match, so CallKit's speaker button shows the route the call is on;
+`speakerOff` in a video call moves it to a voice chat, the only way off the speaker there.
 
 ### Events
 
@@ -75,7 +82,8 @@ call.pip('remote', track, (event) => {});   // 'start', 'stop', 'restore'; a nul
 const opening = await call.showPip(true);
 ```
 
-`pip` arms the system's floating window for a call's video, one view's at a time. It opens by itself
+`pip` arms the system's floating window for a call's video - the far end's, or the camera's when
+there is none, which iOS and Android stop in the background otherwise - one view's at a time. It opens by itself
 when the app leaves the foreground, or at once with `showPip(true)`; `restore` is the window's way
 back to the call. On iOS the window shows the native picture of a `CallMedia` track and grows from the
 view `render` draws it in; the camera keeps sending while it is open where the device supports
@@ -145,5 +153,7 @@ the audio session.
 
 ## Status
 
-0.5.2 has not been run on a device. The Android sources compile against the Android 16 API; the iOS
-sources have not been compiled.
+Both platforms build in CI. On an iPhone: calls in and out, from the lock screen and in the
+foreground, with sound both ways on native media; Recents; hold; the camera switch; the background
+keep-alive; picture in picture. Not yet run on a device: two calls at once, Android picture in picture
+(0.5.0) and the speaker routing (0.5.2).
