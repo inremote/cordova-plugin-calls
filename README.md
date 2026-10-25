@@ -15,7 +15,7 @@ The two plugins cannot be installed together.
 ## Install
 
 ```xml
-<plugin name="cordova-plugin-calls" spec="github:inremote/cordova-plugin-calls#v0.5.3" />
+<plugin name="cordova-plugin-calls" spec="github:inremote/cordova-plugin-calls#v0.5.4" />
 ```
 
 Requires cordova-ios 8 and cordova-android 13 or newer. On iOS the app needs the VoIP push entitlement
@@ -83,7 +83,8 @@ const opening = await call.showPip(true);
 ```
 
 `pip` arms the system's floating window for a call's video - the far end's, or the camera's when
-there is none, which iOS and Android stop in the background otherwise - one view's at a time. It opens by itself
+there is none, which iOS and Android stop in the background otherwise - one view's at a time, in the
+picture's own shape: portrait for a phone's camera held upright, and following it as it turns. It opens by itself
 when the app leaves the foreground, or at once with `showPip(true)`; `restore` is the window's way
 back to the call. On iOS the window shows the native picture of a `CallMedia` track and grows from the
 view `render` draws it in; the camera keeps sending while it is open where the device supports
@@ -157,4 +158,5 @@ the audio session.
 Both platforms build in CI. On an iPhone: calls in and out, from the lock screen and in the
 foreground, with sound both ways on native media; Recents; hold; the camera switch; the background
 keep-alive; picture in picture. Not yet run on a device: two calls at once, Android picture in picture
-(0.5.0), the speaker routing (0.5.2) and the view stacking (0.5.3).
+(0.5.0), the speaker routing (0.5.2), the view stacking (0.5.3) and the
+window's shape for the camera (0.5.4).

@@ -507,7 +507,7 @@ static AVAudioEngine *keepEngine = nil;
         BOOL live = watch.last > 0 && now - watch.last < 1.0;
         if (live == watch.live) continue;
         watch.live = live;
-        CDVPeer *peer = self.peers[watch.pcId];
+        CDVPeer *peer = watch.pcId ? self.peers[watch.pcId] : nil;
         if (peer) [self emit:peer event:@"trackmute" extra:@{ @"trackId": watch.trackId, @"muted": @(!live) }];
     }
 }
@@ -563,6 +563,11 @@ static AVAudioEngine *keepEngine = nil;
     RTCVideoTrack *track = [self.factory videoTrackWithSource:source trackId:[NSUUID UUID].UUIDString];
     [capturer startCaptureWithDevice:device format:format fps:(NSInteger)MIN(30.0, fastest) completionHandler:nil];
     self.capturers[track.trackId] = capturer;
+    // its frame size, turned as the phone is, is the floating window's shape when it carries the camera
+    CDVFrameWatch *watch = [[CDVFrameWatch alloc] init];
+    watch.trackId = track.trackId;
+    [track addRenderer:watch];
+    self.watches[track.trackId] = watch;
     return track;
 }
 
@@ -978,6 +983,9 @@ static AVAudioEngine *keepEngine = nil;
     RTCCameraVideoCapturer *capturer = media.capturers[trackId];
     if (capturer) [capturer stopCaptureWithCompletionHandler:nil];
     [media.capturers removeObjectForKey:trackId];
+    CDVFrameWatch *watch = media.watches[trackId];
+    if (watch && [media.tracks[trackId] isKindOfClass:[RTCVideoTrack class]]) [(RTCVideoTrack *)media.tracks[trackId] removeRenderer:watch];
+    [media.watches removeObjectForKey:trackId];
     for (NSString *viewId in [media.viewTracks allKeysForObject:trackId]) {
         [media detach:viewId];
         media.views[viewId].hidden = YES;
