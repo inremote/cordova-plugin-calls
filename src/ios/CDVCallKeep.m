@@ -28,6 +28,7 @@ static NSString *const kSettings = @"CDVCallKeepSettings";
 @property (nonatomic, strong) NSMutableDictionary<NSUUID *, NSString *> *ids;
 @property (nonatomic, strong) NSMutableSet<NSUUID *> *outgoing;
 @property (nonatomic, strong) NSMutableSet<NSUUID *> *answered;
+@property (nonatomic, strong) NSMutableSet<NSUUID *> *videos;                     // calls rung or placed as video
 @property (nonatomic, strong) NSMutableOrderedSet<NSString *> *ended;               // ids of calls already over
 @property (nonatomic, strong) NSMutableSet<NSUUID *> *own;                        // actions the app asked for
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSMutableArray *> *pending;
@@ -63,6 +64,7 @@ static NSString *const kSettings = @"CDVCallKeepSettings";
     _ids = [NSMutableDictionary dictionary];
     _outgoing = [NSMutableSet set];
     _answered = [NSMutableSet set];
+    _videos = [NSMutableSet set];
     _ended = [NSMutableOrderedSet orderedSet];
     _own = [NSMutableSet set];
     _pending = [NSMutableDictionary dictionary];
@@ -164,6 +166,7 @@ static NSString *const kSettings = @"CDVCallKeepSettings";
     [self.ids removeObjectForKey:uuid];
     [self.outgoing removeObject:uuid];
     [self.answered removeObject:uuid];
+    [self.videos removeObject:uuid];
 }
 
 - (CXCallUpdate *)updateFor:(NSString *)name handle:(NSString *)handle video:(BOOL)video
@@ -188,6 +191,7 @@ static NSString *const kSettings = @"CDVCallKeepSettings";
     }
     BOOL known = self.uuids[callId] != nil;
     NSUUID *uuid = [self uuidFor:callId create:YES];
+    if (video) [self.videos addObject:uuid];
     [self.provider reportNewIncomingCallWithUUID:uuid update:[self updateFor:name handle:handle video:video]
         completion:^(NSError *reported) { dispatch_async(dispatch_get_main_queue(), ^{
             NSError *error = reported;
@@ -245,12 +249,13 @@ static NSString *const kSettings = @"CDVCallKeepSettings";
     [self.ids removeAllObjects];
     [self.outgoing removeAllObjects];
     [self.answered removeAllObjects];
+    [self.videos removeAllObjects];
     [self.own removeAllObjects];
 }
 
 - (void)provider:(CXProvider *)provider performStartCallAction:(CXStartCallAction *)action
 {
-    [CDVCallMedia prepareAudioSession];
+    [CDVCallMedia prepareAudioSession:action.video];
     [self.outgoing addObject:action.callUUID];
     [provider reportOutgoingCallWithUUID:action.callUUID startedConnectingAtDate:nil];
     CXCallUpdate *update = [self updateFor:action.contactIdentifier handle:action.handle.value video:action.video];
@@ -269,7 +274,7 @@ static NSString *const kSettings = @"CDVCallKeepSettings";
 
 - (void)provider:(CXProvider *)provider performAnswerCallAction:(CXAnswerCallAction *)action
 {
-    [CDVCallMedia prepareAudioSession];
+    [CDVCallMedia prepareAudioSession:[self.videos containsObject:action.callUUID]];
     [self.answered addObject:action.callUUID];
     [action fulfill];
     [self emit:@"answer" body:[self describe:action.callUUID extra:nil]];
@@ -647,7 +652,10 @@ static NSString *const kSettings = @"CDVCallKeepSettings";
 - (void)setSpeaker:(BOOL)on command:(CDVInvokedUrlCommand *)command
 {
     NSError *error = nil;
-    [[AVAudioSession sharedInstance] overrideOutputAudioPort:(on ? AVAudioSessionPortOverrideSpeaker : AVAudioSessionPortOverrideNone) error:&error];
+    AVAudioSession *session = [AVAudioSession sharedInstance];
+    // a video chat plays on the speaker by itself, so off is a voice chat
+    if (!on && [session.mode isEqualToString:AVAudioSessionModeVideoChat]) [session setMode:AVAudioSessionModeVoiceChat error:nil];
+    [session overrideOutputAudioPort:(on ? AVAudioSessionPortOverrideSpeaker : AVAudioSessionPortOverrideNone) error:&error];
     [self finish:command error:error];
 }
 

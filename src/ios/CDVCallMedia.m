@@ -417,15 +417,19 @@ static AVAudioEngine *keepEngine = nil;
 #pragma mark - audio, handed over by CallKit
 
 // CallKit asks for the session to be configured before a call is reported and activated by CallKit
-// alone. libwebrtc runs in manual-audio mode, so its audio unit starts only once CallKit says so.
-+ (void)prepareAudioSession
+// alone. libwebrtc runs in manual-audio mode, so its audio unit starts only once CallKit says so. A
+// video call is a video chat, which plays on the speaker, as FaceTime's does, and CallKit's own speaker
+// button reads the route it finds.
++ (void)prepareAudioSession:(BOOL)video
 {
     [self stopKeeping];
     callAudio = YES;
     RTCAudioSession *session = [RTCAudioSession sharedInstance];
     session.useManualAudio = YES;
+    RTCAudioSessionConfiguration *configuration = [RTCAudioSessionConfiguration webRTCConfiguration];
+    configuration.mode = video ? AVAudioSessionModeVideoChat : AVAudioSessionModeVoiceChat;
     [session lockForConfiguration];
-    [session setConfiguration:[RTCAudioSessionConfiguration webRTCConfiguration] error:nil];
+    [session setConfiguration:configuration error:nil];
     [session unlockForConfiguration];
 }
 

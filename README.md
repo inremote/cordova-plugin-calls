@@ -15,7 +15,7 @@ The two plugins cannot be installed together.
 ## Install
 
 ```xml
-<plugin name="cordova-plugin-calls" spec="github:inremote/cordova-plugin-calls#v0.5.1" />
+<plugin name="cordova-plugin-calls" spec="github:inremote/cordova-plugin-calls#v0.5.2" />
 ```
 
 Requires cordova-ios 8 and cordova-android 13 or newer. On iOS the app needs the VoIP push entitlement
@@ -145,5 +145,5 @@ the audio session.
 
 ## Status
 
-0.5.1 has not been run on a device. The Android sources compile against the Android 16 API; the iOS
+0.5.2 has not been run on a device. The Android sources compile against the Android 16 API; the iOS
 sources have not been compiled.

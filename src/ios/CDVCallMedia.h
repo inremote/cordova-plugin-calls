@@ -4,7 +4,7 @@
 @interface CDVCallMedia : NSObject
 
 + (void)keepRunning:(BOOL)on;
-+ (void)prepareAudioSession;
++ (void)prepareAudioSession:(BOOL)video;
 + (void)audioSessionDidActivate:(AVAudioSession *)session;
 + (void)audioSessionDidDeactivate:(AVAudioSession *)session;
 
