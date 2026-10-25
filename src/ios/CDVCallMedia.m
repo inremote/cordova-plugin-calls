@@ -142,6 +142,8 @@ static RTCConfiguration *configurationFrom(NSDictionary *config)
 // AVSampleBufferDisplayLayer, and a decoder's planes are packed into a pixel buffer first.
 @interface CDVSampleView : UIView <RTCVideoRenderer>
 @property (nonatomic, copy) void (^sized)(CGSize size);
+/// cropped to fill, or fitted whole - as the view the window grows from and returns to draws it
+@property (nonatomic) BOOL fill;
 @end
 
 @implementation CDVSampleView {
@@ -175,6 +177,15 @@ static RTCConfiguration *configurationFrom(NSDictionary *config)
 - (void)setSize:(CGSize)size
 {
     dispatch_async(dispatch_get_main_queue(), ^{ if (self.sized) self.sized(size); });
+}
+
+- (void)setFill:(BOOL)fill
+{
+    _fill = fill;
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    _display.videoGravity = fill ? AVLayerVideoGravityResizeAspectFill : AVLayerVideoGravityResizeAspect;
+    [CATransaction commit];
 }
 
 static CVPixelBufferRef pixelsOf(RTCVideoFrame *frame)
@@ -662,12 +673,25 @@ static AVAudioEngine *keepEngine = nil;
     else [self.pipTrack removeRenderer:self.pipView];
 }
 
+// the window grows from the view and goes back into it drawing the picture as the view does, so
+// neither animation ends in a jump from fitted to cropped
+- (void)pipMatchSource
+{
+    self.pipView.fill = self.views[self.pipViewId].videoContentMode == UIViewContentModeScaleAspectFill;
+}
+
 - (void)pictureInPictureControllerWillStartPictureInPicture:(AVPictureInPictureController *)controller
 {
     CGSize size = self.watches[self.pipTrack.trackId].size;
     self.pipContent.preferredContentSize = size.width > 0 && size.height > 0 ? size : CGSizeMake(16, 9);
+    [self pipMatchSource];
     [self pipShow:YES];
     [self pipEmit:@"start"];
+}
+
+- (void)pictureInPictureControllerWillStopPictureInPicture:(AVPictureInPictureController *)controller
+{
+    [self pipMatchSource];
 }
 
 - (void)pictureInPictureController:(AVPictureInPictureController *)controller failedToStartPictureInPictureWithError:(NSError *)error
