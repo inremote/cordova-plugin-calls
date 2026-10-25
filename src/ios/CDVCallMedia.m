@@ -657,10 +657,6 @@ static AVAudioEngine *keepEngine = nil;
     CGSize size = self.watches[self.pipTrack.trackId].size;
     self.pipContent.preferredContentSize = size.width > 0 && size.height > 0 ? size : CGSizeMake(16, 9);
     [self pipShow:YES];
-}
-
-- (void)pictureInPictureControllerDidStartPictureInPicture:(AVPictureInPictureController *)controller
-{
     [self pipEmit:@"start"];
 }
 
@@ -1045,9 +1041,10 @@ static AVAudioEngine *keepEngine = nil;
 {
     AVPictureInPictureController *pip = [self media].pip;
     BOOL on = command.arguments.count > 0 && [command.arguments[0] boolValue];
-    if (on && pip.isPictureInPicturePossible && !pip.isPictureInPictureActive) [pip startPictureInPicture];
+    BOOL starting = on && pip.isPictureInPicturePossible && !pip.isPictureInPictureActive;
+    if (starting) [pip startPictureInPicture];
     else if (!on && pip.isPictureInPictureActive) [pip stopPictureInPicture];
-    [self.commandDelegate sendPluginResult:[CDVPluginResult resultWithStatus:CDVCommandStatus_OK] callbackId:command.callbackId];
+    [self.commandDelegate sendPluginResult:[CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsBool:starting] callbackId:command.callbackId];
 }
 
 @end
