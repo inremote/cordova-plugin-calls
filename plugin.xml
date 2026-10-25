@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <plugin xmlns="http://apache.org/cordova/ns/plugins/1.0" xmlns:android="http://schemas.android.com/apk/res/android"
-	id="cordova-plugin-calls" version="0.4.1">
+	id="cordova-plugin-calls" version="0.5.0">
 
 	<name>CallKeep</name>
 	<description>CallKit and ConnectionService for several calls at once, with hold, behind cordova-plugin-callkit's API</description>
@@ -86,6 +86,12 @@
 				</intent-filter>
 			</service>
 		</config-file>
+
+		<!-- picture in picture floats the whole activity; Cordova's own configChanges keep it from being
+		 recreated as it shrinks -->
+		<edit-config file="AndroidManifest.xml" target="/manifest/application/activity[@android:name='MainActivity']" mode="merge">
+			<activity android:supportsPictureInPicture="true" />
+		</edit-config>
 
 		<source-file src="src/android/CallKeep.java" target-dir="src/com/inremote/calls" />
 		<source-file src="src/android/CallConnectionService.java" target-dir="src/com/inremote/calls" />

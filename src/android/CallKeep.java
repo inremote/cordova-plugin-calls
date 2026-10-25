@@ -1,6 +1,8 @@
 package com.inremote.calls;
 
 import android.Manifest;
+import android.app.Activity;
+import android.app.PictureInPictureParams;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -8,11 +10,16 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.drawable.Icon;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.telecom.PhoneAccount;
 import android.telecom.PhoneAccountHandle;
 import android.telecom.TelecomManager;
 import android.telecom.VideoProfile;
+
+import androidx.activity.ComponentActivity;
+import androidx.core.app.PictureInPictureModeChangedInfo;
+import androidx.lifecycle.Lifecycle;
 
 import org.apache.cordova.CallbackContext;
 import org.apache.cordova.CordovaInterface;
@@ -50,6 +57,8 @@ public class CallKeep extends CordovaPlugin {
     private boolean askedToEnable;
     private Runnable afterPermission;
     private CallbackContext permissionCallback;
+    private String pipViewId;
+    private CallbackContext pipCallback;
 
     @Override
     public void initialize(CordovaInterface cordova, CordovaWebView webView) {
@@ -63,6 +72,7 @@ public class CallKeep extends CordovaPlugin {
         } catch (RuntimeException ignored) {
         }
         registerAccount();
+        ((ComponentActivity) cordova.getActivity()).addOnPictureInPictureModeChangedListener(this::pipChanged);
         synchronized (CallKeep.class) {
             instance = this;
         }
@@ -190,6 +200,8 @@ public class CallKeep extends CordovaPlugin {
             case "setRingtone":
             case "setIncludeInRecents":
             case "setDTMFState": callback.success(); return true;
+            case "rtcPip": pip(args, callback); return true;
+            case "rtcPipStart": pipStart(args.optBoolean(0), callback); return true;
             // VoIP push is iOS's; Android's calls arrive through the ordinary push plugin
             case "init": callback.error("VoIP push is iOS only"); return true;
             default: return false;
@@ -307,6 +319,64 @@ public class CallKeep extends CordovaPlugin {
         for (CallConnection c : CallConnectionService.all()) {
             if (c.isLive()) { c.speaker(on); return; }
         }
+    }
+
+    // --- picture in picture ----------------------------------------------------------------------
+
+    // The whole activity is the floating window, so arming it is only a flag: one call's view at a time,
+    // whose callback hears the window open and close.
+    private void pip(JSONArray args, CallbackContext callback) {
+        String viewId = args.isNull(0) ? null : args.optString(0, null);
+        if (!args.isNull(1)) {
+            pipViewId = viewId;
+            pipCallback = callback;
+        } else {
+            if (viewId != null && viewId.equals(pipViewId)) {
+                pipViewId = null;
+                pipCallback = null;
+            }
+            callback.success();
+        }
+        final boolean armed = pipViewId != null;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            final Activity activity = cordova.getActivity();
+            activity.runOnUiThread(() -> activity.setPictureInPictureParams(new PictureInPictureParams.Builder().setAutoEnterEnabled(armed).build()));
+        }
+    }
+
+    private void pipStart(boolean on, final CallbackContext callback) {
+        final Activity activity = cordova.getActivity();
+        if (!on || pipViewId == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.O || !activity.getPackageManager().hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
+            callback.sendPluginResult(new PluginResult(PluginResult.Status.OK, false));
+            return;
+        }
+        activity.runOnUiThread(() -> {
+            boolean opening;
+            try {
+                opening = activity.enterPictureInPictureMode(new PictureInPictureParams.Builder().build());
+            } catch (IllegalStateException e) {
+                opening = false;
+            }
+            callback.sendPluginResult(new PluginResult(PluginResult.Status.OK, opening));
+        });
+    }
+
+    // the window's X leaves the activity stopped; its expand button brings the activity back on screen
+    private void pipChanged(PictureInPictureModeChangedInfo info) {
+        if (info.isInPictureInPictureMode()) {
+            pipEmit("start");
+            return;
+        }
+        boolean closed = ((ComponentActivity) cordova.getActivity()).getLifecycle().getCurrentState() == Lifecycle.State.CREATED;
+        if (!closed) pipEmit("restore");
+        pipEmit("stop");
+    }
+
+    private void pipEmit(String event) {
+        if (pipCallback == null) return;
+        PluginResult result = new PluginResult(PluginResult.Status.OK, event);
+        result.setKeepCallback(true);
+        pipCallback.sendPluginResult(result);
     }
 
     private void setAppName(String name, CallbackContext callback) {

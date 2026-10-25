@@ -78,6 +78,28 @@ exports.speakerOn = function (success, error) { call('speakerOn', [], success, e
 exports.speakerOff = function (success, error) { call('speakerOff', [], success, error); };
 
 /**
+ * The system's floating window for a call's video - picture in picture. `pip(viewId, track, onevent)`
+ * arms it for that view's remote track: it opens by itself when the app leaves the foreground (Android
+ * 12 and later), or at once with `showPip(true)`, which resolves to whether it is opening. `onevent`
+ * hears 'start', 'stop' and 'restore' - the window's way back to the call. No track disarms it, if it
+ * is still that view's.
+ *
+ * iOS floats the native picture of a CallMedia track, the view being where the window grows from;
+ * Android floats the whole app, so the page shows only the call while it is in the window.
+ */
+exports.pip = function (viewId, track, onevent) {
+    call('rtcPip', [viewId, track ? track.id : null], function (event) {
+        if (onevent && typeof event === 'string') onevent(event);
+    });
+};
+
+exports.showPip = function (on) {
+    return new Promise(function (resolve) {
+        call('rtcPipStart', [!!on], resolve, function () { resolve(false); });
+    });
+};
+
+/**
  * answer, reject, hangup, hold, unhold, mute, unmute, DTMF - each with `{ callId }`, DTMF also with
  * `digits`; sendCall - a call started from Recents or Siri, with `{ callId, callName, handle,
  * isVideo }`; receiveCall - an incoming call reported, by the app or by a VoIP push, with `{ callId,

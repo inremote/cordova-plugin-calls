@@ -15,7 +15,7 @@ The two plugins cannot be installed together.
 ## Install
 
 ```xml
-<plugin name="cordova-plugin-calls" spec="github:inremote/cordova-plugin-calls#v0.4.1" />
+<plugin name="cordova-plugin-calls" spec="github:inremote/cordova-plugin-calls#v0.5.0" />
 ```
 
 Requires cordova-ios 8 and cordova-android 13 or newer. On iOS the app needs the VoIP push entitlement
@@ -68,6 +68,21 @@ Events report what the system UI did. What the app did itself - `endCall`, `setO
 raises nothing. An event raised while nothing listens for it, such as an answer from the lock screen
 while the page is still loading, is kept and delivered to the first listener.
 
+### Picture in picture
+
+```js
+call.pip('remote', track, (event) => {});   // 'start', 'stop', 'restore'; a null track disarms
+const opening = await call.showPip(true);
+```
+
+`pip` arms the system's floating window for a call's video, one view's at a time. It opens by itself
+when the app leaves the foreground, or at once with `showPip(true)`; `restore` is the window's way
+back to the call. On iOS the window shows the native picture of a `CallMedia` track and grows from the
+view `render` draws it in; the camera keeps sending while it is open where the device supports
+multitasking camera access, and the window takes no touches, so it has no buttons of its own. On
+Android the whole app is the window (opening by itself from Android 12), so the page shows only the
+call while it is in it; the expand button sends `restore` then `stop`, the X only `stop`.
+
 ### VoIP push (iOS)
 
 ```js
@@ -105,19 +120,13 @@ const pc = new media.RTCPeerConnection({ iceServers });                     // t
 stream.getTracks().forEach(track => pc.addTrack(track, stream));
 
 media.render('remote', track, { x, y, width, height }, { cover: true });   // page pixels, or null to hide
-media.pip('remote', track, event => {});                                     // the system's floating window
-media.showPip(true);
 media.keepRunning(true);                                                    // counted: every true needs its false
 ```
 
 `RTCPeerConnection` covers what a call uses - offers and answers, ICE, tracks, transceivers,
 `replaceTrack`, `restartIce`, `getStats` - and carries no data channel. Video is not a `srcObject`:
 `render` places the native picture under the webview at the given rect, so the page has to be
-transparent there; one view per id, so several calls each keep their own. `pip` arms the system's
-floating window (picture in picture) on the remote track shown in a view, which is where it grows from:
-it opens by itself when the app leaves the foreground, or with `showPip(true)`, and its callback hears
-`start`, `stop` and `restore` (the window's button back to the call); no track disarms it. The camera
-keeps sending while it is open where the device supports multitasking camera access. `keepRunning` keeps the app
+transparent there; one view per id, so several calls each keep their own. `keepRunning` keeps the app
 alive in the background while something other than a call needs it, and steps aside while a call holds
 the audio session.
 
@@ -136,5 +145,5 @@ the audio session.
 
 ## Status
 
-0.4.1 has not been run on a device. The Android sources compile against the Android 16 API; the iOS
+0.5.0 has not been run on a device. The Android sources compile against the Android 16 API; the iOS
 sources have not been compiled.
